@@ -108,7 +108,7 @@ async def root():
         error_html = """
         <html>
             <body style="font-family: Arial; text-align: center; margin-top: 100px;">
-                <h1>❌ Template Error</h1>
+                <h1> Template Error</h1>
                 <p>The template file 'templates/index.html' was not found.</p>
                 <p>Please make sure the templates directory exists and contains index.html.</p>
             </body>
@@ -221,7 +221,7 @@ async def upload_document(file: UploadFile = File(...)):
         
     except Exception as e:
         import traceback
-        print(f"❌ Full traceback: {traceback.format_exc()}")
+        print(f"Full traceback: {traceback.format_exc()}")
         # Clean up temporary file if it exists
         if tmp_file_path and os.path.exists(tmp_file_path):
             try:

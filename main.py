@@ -21,7 +21,7 @@ from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores import Chroma
 from langchain.chains import RetrievalQA
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
-from langchain.docstore.document import Document
+from langchain.schema import Document
 import PyPDF2
 import docx
 
@@ -70,21 +70,8 @@ async def lifespan(app: FastAPI):
         # Set environment variable first
         os.environ["OPENAI_API_KEY"] = api_key
         
-        # Try alternative initialization approaches
-        try:
-            embeddings = OpenAIEmbeddings(model="text-embedding-ada-002")
-        except Exception as e1:
-            print(f"⚠️ First attempt failed: {e1}")
-            try:
-                # Fallback with minimal parameters
-                from langchain_openai.embeddings import OpenAIEmbeddings as AltOpenAIEmbeddings
-                embeddings = AltOpenAIEmbeddings()
-            except Exception as e2:
-                print(f"⚠️ Second attempt failed: {e2}")
-                # Final fallback - use older style initialization
-                from langchain.embeddings import OpenAIEmbeddings as LegacyOpenAIEmbeddings
-                embeddings = LegacyOpenAIEmbeddings()
-        
+        # Simple, clean initialization - tutorial-friendly
+        embeddings = OpenAIEmbeddings()
         print("✅ OpenAI embeddings initialized successfully")
         
         print("🔄 Initializing OpenAI chat model...")

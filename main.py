@@ -284,19 +284,36 @@ async def upload_document(file: UploadFile = File(...)):
         try:
             if vectorstore is None:
                 print("🆕 Creating new vector store...")
-                # Create new vector store with simple in-memory approach first
-                vectorstore = Chroma.from_documents(chunks, embeddings)
-                print("✅ Created new in-memory vector store")
+                # Use the existing chroma_client to avoid instance conflicts
+                vectorstore = Chroma(
+                    client=chroma_client,
+                    collection_name="documents",
+                    embedding_function=embeddings
+                )
+                # Add documents to the empty vectorstore
+                vectorstore.add_documents(chunks)
+                print("✅ Created new vector store with existing client")
             else:
                 print("➕ Adding to existing vector store...")
                 vectorstore.add_documents(chunks)
                 print("✅ Added documents to existing vector store")
         except Exception as ve:
             print(f"❌ Vector store error: {ve}")
-            print("🔄 Trying simple in-memory vector store...")
-            # Fallback: create simple in-memory vector store
-            vectorstore = Chroma.from_documents(chunks, embeddings)
-            print("✅ Created fallback vector store")
+            print("🔄 Trying to reset and recreate vector store...")
+            try:
+                # Reset the client and try again
+                chroma_client.reset()
+                vectorstore = Chroma(
+                    client=chroma_client,
+                    collection_name="documents",
+                    embedding_function=embeddings
+                )
+                vectorstore.add_documents(chunks)
+                print("✅ Created vector store after reset")
+            except Exception as e2:
+                print(f"❌ Fallback also failed: {e2}")
+                print("💡 Try restarting the application to clear ChromaDB state")
+                raise Exception(f"Vector store creation failed: {ve}. Fallback failed: {e2}")
         
         print("🤖 Creating Q&A chain...")
         # Create/update the Q&A chain

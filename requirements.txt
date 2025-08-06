@@ -3,6 +3,7 @@ uvicorn==0.24.0
 langchain==0.2.14
 langchain-openai==0.1.23
 langchain-community==0.2.12
+langchain-chroma==0.1.4
 chromadb==0.4.15
 python-multipart==0.0.6
 pypdf2==3.0.1

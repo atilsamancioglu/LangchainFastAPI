@@ -10,6 +10,10 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
+# Disable ChromaDB telemetry completely
+import os
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
+
 load_dotenv()
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import HTMLResponse
@@ -17,7 +21,7 @@ from pydantic import BaseModel
 import chromadb
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 from langchain.chains import RetrievalQA
 from langchain.schema import Document
 import PyPDF2
@@ -41,7 +45,8 @@ llm = None
 chroma_client = chromadb.Client(
     settings=chromadb.config.Settings(
         anonymized_telemetry=False,
-        allow_reset=True
+        allow_reset=True,
+        is_persistent=False  # Ensure ephemeral mode
     )
 )
 
@@ -91,120 +96,25 @@ app = FastAPI(
 
 @app.get("/")
 async def root():
-    """Root endpoint - returns simple HTML interface"""
-    html_content = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>DocuChat - Document Q&A</title>
-        <style>
-            body { font-family: Arial, sans-serif; margin: 40px; }
-            .container { max-width: 800px; margin: 0 auto; }
-            .upload-section, .chat-section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; }
-            input, textarea, button { margin: 10px 0; padding: 10px; }
-            textarea { width: 100%; height: 100px; }
-            button { background: #007bff; color: white; border: none; cursor: pointer; }
-            .response { margin: 10px 0; padding: 10px; background: #f8f9fa; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>📚 DocuChat - Document Q&A System</h1>
-            
-            <div class="upload-section">
-                <h3>1. Upload Documents</h3>
-                <input type="file" id="fileInput" multiple accept=".pdf,.txt,.docx">
-                <button onclick="uploadFiles()">Upload Documents</button>
-                <div id="uploadStatus"></div>
-            </div>
-            
-            <div class="chat-section">
-                <h3>2. Ask Questions</h3>
-                <textarea id="questionInput" placeholder="Ask a question about your documents..."></textarea>
-                <button onclick="askQuestion()">Ask Question</button>
-                <div id="chatResponse"></div>
-            </div>
-        </div>
-
-        <script>
-            async function uploadFiles() {
-                const fileInput = document.getElementById('fileInput');
-                const files = fileInput.files;
-                const status = document.getElementById('uploadStatus');
-                
-                if (files.length === 0) {
-                    status.innerHTML = '<p style="color: red;">Please select files first!</p>';
-                    return;
-                }
-                
-                status.innerHTML = '<p>Uploading...</p>';
-                
-                for (let file of files) {
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    
-                    try {
-                        const response = await fetch('/upload', {
-                            method: 'POST',
-                            body: formData
-                        });
-                        
-                        if (response.ok) {
-                            status.innerHTML += `<p style="color: green;">✓ ${file.name} uploaded successfully!</p>`;
-                        } else {
-                            status.innerHTML += `<p style="color: red;">✗ Failed to upload ${file.name}</p>`;
-                        }
-                    } catch (error) {
-                        status.innerHTML += `<p style="color: red;">✗ Error uploading ${file.name}</p>`;
-                    }
-                }
-            }
-            
-            async function askQuestion() {
-                const questionInput = document.getElementById('questionInput');
-                const question = questionInput.value.trim();
-                const responseDiv = document.getElementById('chatResponse');
-                
-                if (!question) {
-                    responseDiv.innerHTML = '<p style="color: red;">Please enter a question!</p>';
-                    return;
-                }
-                
-                responseDiv.innerHTML = '<p>Thinking...</p>';
-                
-                try {
-                    const response = await fetch('/chat', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ question: question })
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (response.ok) {
-                        responseDiv.innerHTML = `
-                            <div class="response">
-                                <h4>Question: ${question}</h4>
-                                <p><strong>Answer:</strong> ${data.answer}</p>
-                                ${data.sources ? `<p><strong>Sources:</strong> ${data.sources.join(', ')}</p>` : ''}
-                            </div>
-                        `;
-                    } else {
-                        responseDiv.innerHTML = `<p style="color: red;">Error: ${data.detail}</p>`;
-                    }
-                } catch (error) {
-                    responseDiv.innerHTML = '<p style="color: red;">Error connecting to server!</p>';
-                }
-                
-                questionInput.value = '';
-            }
-        </script>
-    </body>
-    </html>
-    """
-    return HTMLResponse(content=html_content)
+    """Serve the main page with file upload and chat interface"""
+    try:
+        # Read HTML content from template file
+        html_file_path = os.path.join(os.path.dirname(__file__), "templates", "index.html")
+        with open(html_file_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        return HTMLResponse(content=html_content)
+    except FileNotFoundError:
+        # Fallback error message if template file is missing
+        error_html = """
+        <html>
+            <body style="font-family: Arial; text-align: center; margin-top: 100px;">
+                <h1>❌ Template Error</h1>
+                <p>The template file 'templates/index.html' was not found.</p>
+                <p>Please make sure the templates directory exists and contains index.html.</p>
+            </body>
+        </html>
+        """
+        return HTMLResponse(content=error_html, status_code=500)
 
 @app.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
@@ -397,7 +307,7 @@ async def chat_with_documents(request: ChatRequest):
     
     try:
         # Get answer from the Q&A chain
-        result = qa_chain({"query": request.question})
+        result = qa_chain.invoke({"query": request.question})
 
         # Extract source information
         sources = []
@@ -417,13 +327,17 @@ async def chat_with_documents(request: ChatRequest):
 @app.get("/health")
 async def health_check():
     """Simple health check endpoint"""
+    # Check if template file exists
+    template_exists = os.path.exists(os.path.join(os.path.dirname(__file__), "templates", "index.html"))
+    
     return {
         "status": "healthy", 
         "message": "DocuChat is running!",
         "openai_embeddings_ready": embeddings is not None,
         "openai_llm_ready": llm is not None,
         "vectorstore_ready": vectorstore is not None,
-        "qa_chain_ready": qa_chain is not None
+        "qa_chain_ready": qa_chain is not None,
+        "template_file_exists": template_exists
     }
 
 if __name__ == "__main__":

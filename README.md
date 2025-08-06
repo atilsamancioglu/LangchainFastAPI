@@ -1,88 +1,164 @@
-# DocuChat - FastAPI + LangChain Tutorial
+# DocuChat - Smart Document Q&A System
 
-A simple document Q&A system for learning FastAPI and LangChain integration.
+A modern web application that allows users to upload documents and ask questions about them using AI. Built with FastAPI, LangChain, and OpenAI.
 
-## Tutorial Overview (6 Hours)
+## Features
 
-### Phase 1: Basic Setup (Hours 1-2)
-- FastAPI basics and project structure
-- Pydantic models for request/response
-- Simple chat endpoint with OpenAI integration
-- Basic HTML frontend
+- 📄 **Multiple Document Support**: Upload PDF, TXT, and DOCX files
+- 🤖 **AI-Powered Q&A**: Ask questions about your documents using GPT-4
+- 🎨 **Modern UI**: Beautiful, responsive web interface
+- ⚡ **Fast Processing**: Efficient document chunking and vector storage
+- 🔍 **Source Citations**: See which documents provided the answers
 
-### Phase 2: Document Processing (Hours 3-4)
-- File upload handling in FastAPI
-- Document parsing (PDF, TXT, DOCX)
-- Text chunking with LangChain
-- ChromaDB vector store integration
+## Project Structure
 
-### Phase 3: RAG Implementation (Hours 5-6)
-- Retrieval-Augmented Generation setup
-- Vector similarity search
-- Source attribution
-- Error handling and best practices
+```
+FastAPILangchain/
+├── main.py              # Main FastAPI application
+├── templates/
+│   └── index.html       # Web interface template
+├── requirements.txt     # Python dependencies
+├── .env                 # Environment variables (create this)
+└── README.md           # This file
+```
 
 ## Setup Instructions
 
-1. **Install Dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 1. Environment Setup
 
-2. **Set OpenAI API Key**
-   Create a `.env` file in the project root:
-   ```bash
-   OPENAI_API_KEY=your-api-key-here
-   ```
+```bash
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-3. **Run the Application**
-   ```bash
-   python main.py
-   ```
+# Install dependencies
+pip install -r requirements.txt
+```
 
-4. **Open Browser**
-   Navigate to: http://localhost:8000
+### 2. Configure OpenAI API
 
-## Key Learning Points
+Create a `.env` file in the project root:
 
-### FastAPI Concepts Covered:
-- ✅ Basic app setup and routing
-- ✅ Pydantic models for validation
-- ✅ File uploads with multipart forms
-- ✅ Error handling with HTTPException
-- ✅ Startup events and global state
-- ✅ Static file serving and HTML responses
+```env
+OPENAI_API_KEY=your-openai-api-key-here
+```
 
-### LangChain Concepts Covered:
-- ✅ Document loaders and text splitters
-- ✅ Embeddings and vector stores
-- ✅ Retrievers and Q&A chains
-- ✅ Source document tracking
-- ✅ Chain types and parameters
+### 3. Run the Application
 
-### Integration Concepts:
-- ✅ Async/await patterns
-- ✅ Global state management
-- ✅ Error propagation
-- ✅ File handling and cleanup
+```bash
+python main.py
+```
+
+The application will be available at `http://localhost:8000`
 
 ## API Endpoints
 
-- `GET /` - Main HTML interface
-- `POST /upload` - Upload documents
-- `POST /chat` - Ask questions
-- `GET /health` - Health check
-
-## Supported File Types
-
-- PDF (.pdf)
-- Text files (.txt)
-- Word documents (.docx)
-
-## Architecture
-
+### Health Check
 ```
-Frontend (HTML/JS) → FastAPI → LangChain → OpenAI/ChromaDB
+GET /health
+```
+Returns the application status and component readiness.
+
+### Main Interface
+```
+GET /
+```
+Serves the web interface for document upload and Q&A.
+
+### Upload Document
+```
+POST /upload
+```
+Upload a document (PDF, TXT, or DOCX) for processing.
+
+### Ask Question
+```
+POST /chat
+```
+Ask a question about uploaded documents.
+
+**Request body:**
+```json
+{
+  "question": "Your question about the documents"
+}
 ```
 
-The application demonstrates a complete RAG (Retrieval-Augmented Generation) pipeline with document upload, processing, and intelligent Q&A capabilities.
+**Response:**
+```json
+{
+  "answer": "AI-generated answer",
+  "sources": ["document1.pdf", "document2.txt"]
+}
+```
+
+## Technology Stack
+
+- **Backend**: FastAPI (Python web framework)
+- **AI/ML**: 
+  - LangChain (AI application framework)
+  - OpenAI GPT-4 (Language model)
+  - OpenAI Embeddings (Text embeddings)
+- **Vector Database**: ChromaDB (In-memory vector storage)
+- **Document Processing**: 
+  - PyPDF2 (PDF processing)
+  - python-docx (Word document processing)
+- **Frontend**: HTML, CSS, JavaScript (Vanilla)
+
+## Tutorial Features
+
+This project is designed as a 6-hour tutorial covering:
+
+1. **FastAPI Basics**: API endpoints, file uploads, async operations
+2. **LangChain Integration**: Document loaders, text splitters, retrievers
+3. **OpenAI API**: Embeddings and chat completions
+4. **Vector Databases**: ChromaDB setup and usage
+5. **RAG Implementation**: Retrieval-Augmented Generation patterns
+6. **Web Development**: Modern HTML/CSS/JS frontend
+7. **Project Organization**: Clean code structure and templates
+
+## Development Notes
+
+### Clean Architecture
+- HTML templates separated from Python code
+- Environment variables for configuration
+- Proper error handling and logging
+- Modern LangChain patterns (no deprecated methods)
+
+### Educational Focus
+- Simple, commented code
+- Clear separation of concerns
+- Step-by-step progression
+- Real-world patterns and best practices
+
+## Troubleshooting
+
+### Common Issues
+
+1. **OpenAI API Key Error**
+   - Make sure your `.env` file exists and contains a valid OpenAI API key
+   - Check that the key has sufficient credits
+
+2. **Template Not Found**
+   - Ensure the `templates/` directory exists
+   - Verify `index.html` is in the templates folder
+
+3. **Module Import Errors**
+   - Make sure all dependencies are installed: `pip install -r requirements.txt`
+   - Activate your virtual environment
+
+4. **ChromaDB Issues**
+   - ChromaDB uses in-memory storage by default
+   - Restart the application to clear the vector database
+
+### Development Mode
+
+For development, you can run with auto-reload:
+
+```bash
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+## License
+
+This project is created for educational purposes as part of a LangChain and FastAPI tutorial.

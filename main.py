@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import chromadb
@@ -20,7 +19,6 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores import Chroma
 from langchain.chains import RetrievalQA
-from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain.schema import Document
 import PyPDF2
 import docx
@@ -59,45 +57,30 @@ async def lifespan(app: FastAPI):
     # Check if API key is available
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        print("❌ OPENAI_API_KEY not found in environment variables")
         print("Make sure you have a .env file with OPENAI_API_KEY=your-key")
         return
-    else:
-        print(f"✅ Found OpenAI API key: {api_key[:10]}...{api_key[-4:]}")
-    
+
     try:
-        print("🔄 Initializing OpenAI embeddings...")
         # Set environment variable first
         os.environ["OPENAI_API_KEY"] = api_key
-        
-        # Simple, clean initialization - tutorial-friendly
+
+        # Simple, clean initialization
         embeddings = OpenAIEmbeddings()
-        print("✅ OpenAI embeddings initialized successfully")
-        
-        print("🔄 Initializing OpenAI chat model...")
-        llm = ChatOpenAI(temperature=0.7, model="gpt-3.5-turbo")
-        print("✅ OpenAI chat model initialized successfully")
-        
+        llm = ChatOpenAI(temperature=0.7, model="gpt-4o")
+
     except Exception as e:
-        print(f"❌ Error initializing OpenAI components: {e}")
-        print(f"❌ Error type: {type(e).__name__}")
         import traceback
-        print(f"❌ Full traceback: {traceback.format_exc()}")
-        print("Make sure your OPENAI_API_KEY is correct and has sufficient credits")
-    
+        print(f"Full traceback: {traceback.format_exc()}")
+
     # Check ChromaDB connection
     try:
         # Try to list collections to test connection
         collections = chroma_client.list_collections()
-        print(f"✅ ChromaDB connected successfully. Found {len(collections)} collections.")
+        print(f"ChromaDB connected successfully. Found {len(collections)} collections.")
     except Exception as e:
-        print(f"⚠️ ChromaDB connection issue: {e}")
-        print("Continuing with in-memory vector store as fallback")
-    
+        print(f"ChromaDB connection issue: {e}")
+
     yield
-    
-    # Shutdown (cleanup if needed)
-    print("Shutting down DocuChat application...")
 
 # Initialize FastAPI app with lifespan
 app = FastAPI(
@@ -227,11 +210,11 @@ async def root():
 async def upload_document(file: UploadFile = File(...)):
     """Upload and process a document for Q&A"""
     
-    print(f"🔄 Starting upload process for: {file.filename}")
+    print(f"Starting upload process for: {file.filename}")
     
     # Check if OpenAI components are initialized
     if embeddings is None:
-        print("❌ OpenAI embeddings not initialized")
+        print("OpenAI embeddings not initialized")
         raise HTTPException(status_code=500, detail="OpenAI embeddings not initialized. Check your API key.")
     
     # Check if file type is supported
@@ -239,51 +222,49 @@ async def upload_document(file: UploadFile = File(...)):
     file_extension = os.path.splitext(file.filename)[1].lower()
     
     if file_extension not in supported_types:
-        print(f"❌ Unsupported file type: {file_extension}")
+        print(f"Unsupported file type: {file_extension}")
         raise HTTPException(status_code=400, detail=f"Unsupported file type. Supported: {supported_types}")
     
-    print(f"✅ File type {file_extension} is supported")
+    print(f"File type {file_extension} is supported")
     
     tmp_file_path = None
     
     try:
-        print("📁 Saving uploaded file temporarily...")
+        print("Saving uploaded file temporarily...")
         # Save uploaded file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as tmp_file:
             content = await file.read()
             tmp_file.write(content)
             tmp_file_path = tmp_file.name
         
-        print(f"✅ File saved to: {tmp_file_path}")
+        print(f"File saved to: {tmp_file_path}")
         
-        print("📄 Extracting text from file...")
+        print("Extracting text from file...")
         # Extract text from the file based on its type
         documents = extract_text_from_file(tmp_file_path, file.filename, file_extension)
-        print(f"✅ Extracted {len(documents)} document(s)")
+        print(f"Extracted {len(documents)} document(s)")
         
         if not documents or not any(doc.page_content.strip() for doc in documents):
-            print("❌ No text content found in document")
+            print("No text content found in document")
             raise Exception("No text content could be extracted from the file")
         
-        print("✂️ Splitting documents into chunks...")
+        print("✂Splitting documents into chunks...")
         # Split documents into chunks for better processing
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200
         )
         chunks = text_splitter.split_documents(documents)
-        print(f"✅ Created {len(chunks)} chunks")
-        
+
         if not chunks:
-            print("❌ No chunks created from documents")
             raise Exception("Could not create text chunks from the document")
         
-        print("🔗 Adding chunks to vector store...")
+        print("Adding chunks to vector store...")
         # Add chunks to vector store
         global vectorstore, qa_chain
         try:
             if vectorstore is None:
-                print("🆕 Creating new vector store...")
+                print("Creating new vector store...")
                 # Use the existing chroma_client to avoid instance conflicts
                 vectorstore = Chroma(
                     client=chroma_client,
@@ -292,14 +273,13 @@ async def upload_document(file: UploadFile = File(...)):
                 )
                 # Add documents to the empty vectorstore
                 vectorstore.add_documents(chunks)
-                print("✅ Created new vector store with existing client")
+                print(" Created new vector store with existing client")
             else:
-                print("➕ Adding to existing vector store...")
                 vectorstore.add_documents(chunks)
-                print("✅ Added documents to existing vector store")
+                print("Added documents to existing vector store")
         except Exception as ve:
-            print(f"❌ Vector store error: {ve}")
-            print("🔄 Trying to reset and recreate vector store...")
+            print(f" Vector store error: {ve}")
+            print(" Trying to reset and recreate vector store...")
             try:
                 # Reset the client and try again
                 chroma_client.reset()
@@ -309,13 +289,12 @@ async def upload_document(file: UploadFile = File(...)):
                     embedding_function=embeddings
                 )
                 vectorstore.add_documents(chunks)
-                print("✅ Created vector store after reset")
+                print("Created vector store after reset")
             except Exception as e2:
-                print(f"❌ Fallback also failed: {e2}")
-                print("💡 Try restarting the application to clear ChromaDB state")
+                print(f" Fallback also failed: {e2}")
                 raise Exception(f"Vector store creation failed: {ve}. Fallback failed: {e2}")
         
-        print("🤖 Creating Q&A chain...")
+        print("Creating Q&A chain...")
         # Create/update the Q&A chain
         qa_chain = RetrievalQA.from_chain_type(
             llm=llm,
@@ -323,93 +302,85 @@ async def upload_document(file: UploadFile = File(...)):
             retriever=vectorstore.as_retriever(search_kwargs={"k": 3}),
             return_source_documents=True
         )
-        print("✅ Q&A chain created successfully")
+        print("Q&A chain created successfully")
         
         # Clean up temporary file
-        print("🧹 Cleaning up temporary file...")
         os.unlink(tmp_file_path)
-        print("✅ Cleanup completed")
-        
-        print(f"🎉 Successfully processed {file.filename} with {len(chunks)} chunks")
+        print("Cleanup completed")
         return {"message": f"Successfully processed {file.filename}", "chunks": len(chunks)}
         
     except Exception as e:
-        print(f"❌ Error during processing: {str(e)}")
-        print(f"❌ Error type: {type(e).__name__}")
         import traceback
         print(f"❌ Full traceback: {traceback.format_exc()}")
-        
         # Clean up temporary file if it exists
         if tmp_file_path and os.path.exists(tmp_file_path):
             try:
                 os.unlink(tmp_file_path)
-                print("🧹 Cleaned up temporary file after error")
+                print("Cleaned up temporary file after error")
             except Exception as cleanup_error:
-                print(f"⚠️ Could not clean up temp file: {cleanup_error}")
+                print(f"Could not clean up temp file: {cleanup_error}")
         
         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
 def extract_text_from_file(file_path: str, filename: str, file_extension: str) -> List[Document]:
     """Extract text from different file types and return as LangChain documents"""
     
-    print(f"📖 Extracting text from {file_extension} file: {filename}")
+    print(f"Extracting text from {file_extension} file: {filename}")
     documents = []
     
     try:
         if file_extension == '.pdf':
-            print("📕 Processing PDF file...")
+            print("Processing PDF file...")
             # Handle PDF files
             with open(file_path, 'rb') as file:
                 pdf_reader = PyPDF2.PdfReader(file)
-                print(f"📄 PDF has {len(pdf_reader.pages)} pages")
+                print(f"PDF has {len(pdf_reader.pages)} pages")
                 text = ""
                 for i, page in enumerate(pdf_reader.pages):
                     page_text = page.extract_text()
                     text += page_text + "\n"
-                    print(f"✅ Extracted text from page {i+1}: {len(page_text)} characters")
+                    print(f" Extracted text from page {i+1}: {len(page_text)} characters")
                 
                 if text.strip():
                     documents.append(Document(page_content=text, metadata={"source": filename}))
-                    print(f"✅ Created document with {len(text)} characters")
+                    print(f"Created document with {len(text)} characters")
                 else:
-                    print("❌ No text extracted from PDF")
+                    print(" No text extracted from PDF")
                 
         elif file_extension == '.txt':
-            print("📄 Processing text file...")
+            print("Processing text file...")
             # Handle text files
             with open(file_path, 'r', encoding='utf-8') as file:
                 text = file.read()
-                print(f"✅ Read {len(text)} characters from text file")
+                print(f" Read {len(text)} characters from text file")
                 if text.strip():
                     documents.append(Document(page_content=text, metadata={"source": filename}))
                 else:
-                    print("❌ Text file is empty")
+                    print("Text file is empty")
                 
         elif file_extension == '.docx':
-            print("📘 Processing Word document...")
+            print("Processing Word document...")
             # Handle Word documents
             doc = docx.Document(file_path)
-            print(f"📄 Document has {len(doc.paragraphs)} paragraphs")
+            print(f"Document has {len(doc.paragraphs)} paragraphs")
             text = ""
             for i, paragraph in enumerate(doc.paragraphs):
                 para_text = paragraph.text
                 text += para_text + "\n"
                 if para_text.strip():
-                    print(f"✅ Paragraph {i+1}: {len(para_text)} characters")
+                    print(f" Paragraph {i+1}: {len(para_text)} characters")
             
             if text.strip():
                 documents.append(Document(page_content=text, metadata={"source": filename}))
-                print(f"✅ Created document with {len(text)} characters")
+                print(f" Created document with {len(text)} characters")
             else:
-                print("❌ No text extracted from Word document")
+                print("No text extracted from Word document")
             
-        print(f"📋 Total documents created: {len(documents)}")
+        print(f"Total documents created: {len(documents)}")
         return documents
             
     except Exception as e:
-        print(f"❌ Error extracting text from {file_extension}: {str(e)}")
         import traceback
-        print(f"❌ Extraction traceback: {traceback.format_exc()}")
         raise Exception(f"Error reading {file_extension} file: {str(e)}")
 
 @app.post("/chat", response_model=ChatResponse)
@@ -427,7 +398,7 @@ async def chat_with_documents(request: ChatRequest):
     try:
         # Get answer from the Q&A chain
         result = qa_chain({"query": request.question})
-        
+
         # Extract source information
         sources = []
         if "source_documents" in result:
@@ -460,8 +431,7 @@ if __name__ == "__main__":
     # Check if OpenAI API key is loaded from .env file
     if not os.getenv("OPENAI_API_KEY"):
         print("Warning: OPENAI_API_KEY not found!")
-        print("Please make sure you have a .env file with: OPENAI_API_KEY=your-api-key-here")
     else:
-        print("✅ OpenAI API key loaded successfully from .env file")
+        print(" OpenAI API key loaded successfully from .env file")
     
     uvicorn.run(app, host="0.0.0.0", port=8000)

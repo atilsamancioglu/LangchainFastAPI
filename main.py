@@ -24,6 +24,7 @@ from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_chroma import Chroma
 from langchain.chains import RetrievalQA
 from langchain.schema import Document
+from langchain.prompts import PromptTemplate
 import PyPDF2
 import docx
 
@@ -204,15 +205,44 @@ async def upload_document(file: UploadFile = File(...)):
                 print(f" Fallback also failed: {e2}")
                 raise Exception(f"Vector store creation failed: {ve}. Fallback failed: {e2}")
         
-        print("Creating Q&A chain...")
-        # Create/update the Q&A chain
+        print("Creating Q&A chain with custom prompt...")
+        # Create a custom prompt template for better results
+        
+        # Define a custom prompt template
+        prompt_template = """
+        You are an expert document analysis assistant. Your job is to answer questions based ONLY on the provided context documents.
+
+        Context Information:
+        {context}
+
+        Question: {question}
+
+        Instructions:
+        1. Answer the question using ONLY the information provided in the context above
+        2. If the context doesn't contain enough information to answer the question, say "I cannot find enough information in the provided documents to answer this question"
+        3. Be specific and cite relevant parts of the documents when possible
+        4. If you're unsure about something, express that uncertainty
+        5. Keep your answer concise but comprehensive
+        6. Focus on facts and avoid speculation
+
+        Answer:
+        """
+        
+        # Create the prompt template
+        PROMPT = PromptTemplate(
+            template=prompt_template,
+            input_variables=["context", "question"]
+        )
+        
+        # Create/update the Q&A chain with custom prompt
         qa_chain = RetrievalQA.from_chain_type(
             llm=llm,
             chain_type="stuff",
             retriever=vectorstore.as_retriever(search_kwargs={"k": 3}),
-            return_source_documents=True
+            return_source_documents=True,
+            chain_type_kwargs={"prompt": PROMPT}  # Use our custom prompt
         )
-        print("Q&A chain created successfully")
+        print("Q&A chain with custom prompt created successfully")
         
         # Clean up temporary file
         os.unlink(tmp_file_path)

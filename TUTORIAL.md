@@ -44,6 +44,7 @@ In this 6-hour tutorial, you'll build **DocuChat** - a modern web application th
 - [Step 13: Setting Up ChromaDB](#step-13-setting-up-chromadb)
 - [Step 14: Creating Embeddings](#step-14-creating-embeddings)
 - [Step 15: Building the RAG System](#step-15-building-the-rag-system)
+- [Step 15.5: Prompt Engineering for Better Results](#step-155-prompt-engineering-for-better-results)
 
 **Part 6: Advanced Features & Polish (75 minutes)**
 - [Step 16: Enhanced Error Handling](#step-16-enhanced-error-handling)
@@ -1055,6 +1056,266 @@ async def chat_with_documents(request: ChatRequest):
 4. Notice how the AI now answers based on your specific document!
 
 **🎉 Congratulations!** You've built a complete RAG system!
+
+### Step 15.5: Prompt Engineering for Better Results
+
+Now let's add **prompt engineering** to make our AI responses much better!
+
+#### 15.5.1 Understanding Prompt Engineering
+
+**What is prompt engineering?** It's the art of crafting instructions that guide AI models to give better, more consistent responses.
+
+**Why is it important?** Without good prompts, AI models might:
+- Hallucinate (make up information)
+- Give vague or unhelpful answers
+- Ignore the context documents
+- Be inconsistent in their responses
+
+#### 15.5.2 Create a Custom Prompt Template
+
+Add this import to your `main.py`:
+
+```python
+from langchain.prompts import PromptTemplate
+```
+
+Now, let's create a much better prompt for our Q&A system:
+
+```python
+# Define a custom prompt template for better results
+prompt_template = """
+You are an expert document analysis assistant. Your job is to answer questions based ONLY on the provided context documents.
+
+Context Information:
+{context}
+
+Question: {question}
+
+Instructions:
+1. Answer the question using ONLY the information provided in the context above
+2. If the context doesn't contain enough information to answer the question, say "I cannot find enough information in the provided documents to answer this question"
+3. Be specific and cite relevant parts of the documents when possible
+4. If you're unsure about something, express that uncertainty
+5. Keep your answer concise but comprehensive
+6. Focus on facts and avoid speculation
+
+Answer:
+"""
+
+# Create the prompt template
+PROMPT = PromptTemplate(
+    template=prompt_template,
+    input_variables=["context", "question"]
+)
+```
+
+#### 15.5.3 Update Your Q&A Chain
+
+Replace your simple Q&A chain with this enhanced version:
+
+```python
+# Create/update the Q&A chain with custom prompt
+qa_chain = RetrievalQA.from_chain_type(
+    llm=llm,
+    chain_type="stuff",
+    retriever=vectorstore.as_retriever(search_kwargs={"k": 3}),
+    return_source_documents=True,
+    chain_type_kwargs={"prompt": PROMPT}  # Use our custom prompt
+)
+```
+
+#### 15.5.4 Test Different Prompt Strategies
+
+Let's create multiple prompt templates for different use cases:
+
+```python
+# Academic/Research Prompt
+academic_prompt = """
+You are a research assistant analyzing academic documents. Provide detailed, well-sourced answers.
+
+Context: {context}
+Question: {question}
+
+Guidelines:
+- Cite specific sections or page numbers when available
+- Distinguish between facts and interpretations
+- If multiple perspectives exist, present them
+- Use academic language but remain accessible
+
+Answer:
+"""
+
+# Business/Executive Summary Prompt
+business_prompt = """
+You are a business analyst providing executive summaries. Focus on key insights and actionable information.
+
+Context: {context}
+Question: {question}
+
+Guidelines:
+- Lead with the most important information
+- Use bullet points for clarity
+- Highlight risks, opportunities, and recommendations
+- Keep language professional but concise
+
+Answer:
+"""
+
+# Creative/Exploratory Prompt
+creative_prompt = """
+You are a creative research assistant. Help users explore ideas and connections in their documents.
+
+Context: {context}
+Question: {question}
+
+Guidelines:
+- Think outside the box and make connections
+- Suggest related topics or questions
+- Use analogies to explain complex concepts
+- Encourage further exploration
+
+Answer:
+"""
+```
+
+#### 15.5.5 Add Prompt Selection to Your App
+
+Add this endpoint to let users choose different prompt styles:
+
+```python
+@app.post("/chat/{prompt_style}")
+async def chat_with_style(prompt_style: str, request: ChatRequest):
+    """Chat with different prompt styles"""
+    
+    # Define available prompt styles
+    prompt_templates = {
+        "academic": academic_prompt,
+        "business": business_prompt,
+        "creative": creative_prompt,
+        "default": prompt_template  # Our original prompt
+    }
+    
+    if prompt_style not in prompt_templates:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid prompt style. Available: {list(prompt_templates.keys())}"
+        )
+    
+    # Create a custom chain with the selected prompt
+    custom_prompt = PromptTemplate(
+        template=prompt_templates[prompt_style],
+        input_variables=["context", "question"]
+    )
+    
+    custom_chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff",
+        retriever=vectorstore.as_retriever(search_kwargs={"k": 3}),
+        return_source_documents=True,
+        chain_type_kwargs={"prompt": custom_prompt}
+    )
+    
+    # Get the response
+    result = custom_chain.invoke({"query": request.question})
+    
+    return ChatResponse(
+        answer=result["result"],
+        sources=[doc.metadata.get("source", "Unknown") for doc in result["source_documents"]]
+    )
+```
+
+#### 15.5.6 Advanced Prompt Engineering Techniques
+
+Here are some advanced techniques you can teach:
+
+**1. Few-Shot Learning:**
+```python
+few_shot_prompt = """
+You are an expert at analyzing documents. Here are some examples of good answers:
+
+Example 1:
+Question: "What is the main conclusion?"
+Context: "The study found that 85% of participants showed improvement..."
+Good Answer: "Based on the study results, the main conclusion is that 85% of participants showed improvement, indicating the treatment was effective."
+
+Example 2:
+Question: "What are the limitations?"
+Context: "The study was limited by a small sample size of 50 participants..."
+Good Answer: "The study has several limitations, including a small sample size of only 50 participants, which may limit the generalizability of the results."
+
+Now answer this question:
+Context: {context}
+Question: {question}
+
+Answer:
+"""
+```
+
+**2. Chain of Thought Prompting:**
+```python
+chain_of_thought_prompt = """
+Analyze this step by step:
+
+Context: {context}
+Question: {question}
+
+Step 1: What information is directly relevant to this question?
+Step 2: What are the key facts or data points?
+Step 3: How do these facts relate to the question?
+Step 4: What is the most logical conclusion?
+
+Final Answer:
+"""
+```
+
+**3. Role-Based Prompting:**
+```python
+role_based_prompt = """
+You are a {role} analyzing this document. Your expertise is in {domain}.
+
+Context: {context}
+Question: {question}
+
+As a {role}, what would you focus on? What insights would you provide?
+
+Answer:
+"""
+```
+
+#### 15.5.7 Testing Your Prompt Engineering
+
+Test different prompts with the same question:
+
+1. **Upload a document** (e.g., a research paper)
+2. **Ask the same question** using different prompt styles:
+   - `/chat/default` - Standard prompt
+   - `/chat/academic` - Academic analysis
+   - `/chat/business` - Executive summary
+   - `/chat/creative` - Exploratory analysis
+
+**Notice the differences in:**
+- Tone and style
+- Level of detail
+- Focus areas
+- Citation style
+
+#### 15.5.8 Prompt Engineering Best Practices
+
+**✅ Do:**
+- Be specific about the task
+- Provide clear instructions
+- Give examples when helpful
+- Set boundaries and constraints
+- Test and iterate
+
+**❌ Don't:**
+- Use vague instructions
+- Make prompts too long
+- Forget to test with real data
+- Ignore edge cases
+- Use one-size-fits-all prompts
+
+**🎯 Key Takeaway:** Good prompt engineering can dramatically improve AI performance. It's a crucial skill for building effective AI applications!
 
 ---
 
